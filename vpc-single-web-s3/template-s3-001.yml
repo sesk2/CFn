@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  S3 Template
+  #https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket.html
+
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+# Environment information
+  EnvironmentName:
+    Description: The environment Name. Being prefix name of resources.
+    Type: String
+    MinLength: 1
+
+# Metadata for Displaying Input Parameters
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label:
+          default: "EnvinronmentInformation"
+        Parameters:
+          - EnvironmentName
+
+
+# ------------------------------------------------------------#
+# S3 Bucketss
+# ------------------------------------------------------------# 
+Resources:
+# Web bucket for web hosting
+  S3BucketForWeb001:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join [ '-', [ !Ref EnvironmentName, s3-web-001 ] ]
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        #ErrorDocument: error.html
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, s3-web-001 ] ]
+        - Key: Env
+          Value: 
+            Fn::ImportValue: !Sub ${EnvironmentName}-Env
+
+# Bucket policy for web bucket
+  BucketPolicyForWeb001:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref S3BucketForWeb001
+      PolicyDocument:
+        Statement:
+        - Action: "s3:GetObject"
+          Effect: Allow
+          Resource: !Sub "arn:aws:s3:::${S3BucketForWeb001}/*"
+          Principal: "*"
+
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+  EnvironmentName:
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub ${AWS::StackName}-Envname
+  S3Web001DomainName:
+    Value: !GetAtt S3BucketForWeb001.DomainName
+    Export:
+      Name: !Sub ${EnvironmentName}-S3Web001DomainName
+  S3Web001Url:
+    Value: !GetAtt S3BucketForWeb001.WebsiteURL
+    Export:
+      Name: !Sub ${EnvironmentName}-S3Web001Url

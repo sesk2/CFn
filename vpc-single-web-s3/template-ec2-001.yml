@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  EC2 Template
+
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+# Environment information
+  EnvironmentName:
+    Description: The environment Name. Being prefix name of resources.
+    Type: String
+    MinLength: 1
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.medium
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+
+# SSH key
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    MinLength: 1
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+# AMI ID for Instance
+  LatestAmiID:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    AllowedValues:
+      - '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+# Access IP for web service
+  WEBAccessLocation:
+    Description: ' The IP address range that can be used to HTTP to the EC2 instances'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+# Metadata for Displaying Input Parameters
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label:
+          default: "EnvinronmentInformation"
+        Parameters:
+          - EnvironmentName
+      - Label: 
+          default: "Amazon EC2 Configuration"
+        Parameters:
+          - InstanceType
+          - KeyName
+          - WEBAccessLocation
+          - LatestAmiID
+    ParameterLabels: 
+      LatestAmiID: 
+        default: "AMIID get from SSM parameter"
+
+
+# ------------------------------------------------------------#
+# Security Group
+# ------------------------------------------------------------# 
+Resources:
+  WebEC2SG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: !Join [ '-', [ !Ref EnvironmentName, sg-ec2-web ] ]
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvironmentName}-VPCID
+      GroupDescription: Enable HTTP/HTTPS access from Internet
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: !Ref WEBAccessLocation
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: !Ref WEBAccessLocation
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, sg-ec2-web ] ]
+        - Key: Env
+          Value: 
+            Fn::ImportValue: !Sub ${EnvironmentName}-Env
+
+
+# ------------------------------------------------------------#
+# EC2 Instance
+# ------------------------------------------------------------# 
+  EC2Web001:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref LatestAmiID
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      InstanceInitiatedShutdownBehavior: stop
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          GroupSet: 
+            - !Ref WebEC2SG
+          DeviceIndex: '0'
+          DeleteOnTermination: true
+          SubnetId:
+            Fn::ImportValue: !Sub ${EnvironmentName}-PublicSubnet01
+      IamInstanceProfile:
+        Fn::ImportValue: !Sub ${EnvironmentName}-WebEC2Profile
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -xe
+            yum update -y
+            yum install -y httpd
+            cat << EOF > /var/www/html/index.html
+            <img src="https://s3.amazonaws.com/cloudformation-examples-us-east-1/cloudformation_graphic.png" alt="AWS CloudFormation Logo"/>
+            <h1>Congratulations, you have successfully launched the AWS CloudFormation sample.</h1>
+            EOF
+            systemctl enable httpd
+            systemctl start httpd
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, web001 ] ]
+        - Key: Env
+          Value: 
+            Fn::ImportValue: !Sub ${EnvironmentName}-Env
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp2
+            DeleteOnTermination: true
+
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+  EnvironmentName:
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub ${AWS::StackName}-Envname
+  EC2Web001URL:
+    Value: !Join [ '', [ 'http://', !GetAtt EC2Web001.PublicIp, '/index.html' ] ]
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2Web001-URL
+  EC2Web001ID:
+    Value: !Ref EC2Web001
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2Web001
+  WebEC2SG:
+    Value: !Ref WebEC2SG
+    Export:
+      Name: !Sub ${EnvironmentName}-WebEC2SG
+

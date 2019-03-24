@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  IAM Template
+
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+# Environment information
+  EnvironmentName:
+    Description: The environment Name. Being prefix name of resources.
+    Type: String
+    MinLength: 1
+
+# Metadata for Displaying Input Parameters
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label:
+          default: "EnvinronmentInformation"
+        Parameters:
+          - EnvironmentName
+
+
+# ------------------------------------------------------------#
+# IAM Role
+# ------------------------------------------------------------# 
+Resources:
+# IAM Role
+  WebEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join [ '-', [ WebEC2Role, !Ref EnvironmentName] ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+            - ssm.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Policies:
+        - PolicyName: describe-instance-health-policy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticloadbalancing:DescribeTargetHealth'
+                Resource: '*'
+
+# Instance profile
+  WebEC2Profile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref WebEC2Role
+
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+  EnvironmentName:
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub ${AWS::StackName}-Envname
+  WebEC2Profile:
+    Value: !Ref WebEC2Profile
+    Export:
+      Name: !Sub ${EnvironmentName}-WebEC2Profile
+  WebEC2ProfileArn:
+    Value: !GetAtt WebEC2Profile.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-WebEC2ProfileArn
+
+

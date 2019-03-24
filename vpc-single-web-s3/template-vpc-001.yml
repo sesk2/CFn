@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  VPC Template
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+# Environment information
+  EnvironmentName:
+    Description: The environment Name. Being prefix name of resources.
+    Type: String
+    MinLength: 1
+  EnvironmentType:
+    Description: The environment type
+    Type: String
+    MinLength: 1
+    Default: dev
+    AllowedValues:
+      - prod
+      - stg
+      - dev
+    ConstraintDescription: must be a prod or stg or dev
+
+# CIDR
+  VPCCIDR:
+    Description: The VPC CIDR
+    Type: String
+    Default: 10.0.0.0/16
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  PublicSubnet01CIDR:
+    Description:  CIDR of Public Subnet 01
+    Type: String
+    Default: 10.0.1.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  PublicSubnet02CIDR:
+    Description:  CIDR of Public Subnet 02
+    Type: String
+    Default: 10.0.2.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  PrivateSubnet01CIDR:
+    Description:  CIDR of Private Subnet 01
+    Type: String
+    Default: 10.0.3.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  PrivateSubnet02CIDR:
+    Description:  CIDR of Private Subnet 02
+    Type: String
+    Default: 10.0.4.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+# Availavility Zone
+  Subnet01AZ:
+    Description: Availability Zone of (Public|Private) Subnet 01
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    MinLength: 1
+    ConstraintDescription: must be the name of an existing Availability Zone.
+  Subnet02AZ:
+    Description: Availability Zone of (Public|Private) Subnet 02
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    MinLength: 1
+    ConstraintDescription: must be the name of an existing Availability Zone.
+
+# Metadata for Displaying Input Parameters
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label:
+          default: "EnvinronmentInformation"
+        Parameters:
+          - EnvironmentName
+          - EnvironmentType
+      - Label: 
+          default: "VPC Configuration"
+        Parameters: 
+          - VPCCIDR
+          - PublicSubnet01CIDR
+          - PublicSubnet02CIDR
+          - PrivateSubnet01CIDR
+          - PrivateSubnet02CIDR
+          - Subnet01AZ
+          - Subnet02AZ
+
+
+# ------------------------------------------------------------#
+# VPC
+# ------------------------------------------------------------# 
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, vpc ] ]
+
+
+# ------------------------------------------------------------#
+# Subnet
+# ------------------------------------------------------------# 
+  PublicSubnet01:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet01CIDR
+      AvailabilityZone: !Ref Subnet01AZ
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, subnet-pub-01 ] ]
+  PublicSubnet02:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet02CIDR
+      AvailabilityZone: !Ref Subnet02AZ
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, subnet-pub-02 ] ]
+  PrivateSubnet01:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet01CIDR
+      AvailabilityZone: !Ref Subnet01AZ
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, subnet-int-01 ] ]
+  PrivateSubnet02:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet02CIDR
+      AvailabilityZone: !Ref Subnet02AZ
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, subnet-int-02 ] ]
+
+
+# ------------------------------------------------------------#
+# Internet Gateway
+# ------------------------------------------------------------# 
+# Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, ig ] ]
+
+# Attach to VPC
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+
+# ------------------------------------------------------------#
+# Route Table
+# ------------------------------------------------------------# 
+# Route Table
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref EnvironmentName, rt ] ]
+
+# Route
+  Route:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+# Association with Subnet
+  PubSubnet01RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet01
+      RouteTableId: !Ref RouteTable
+  PubSubnet02RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet02
+      RouteTableId: !Ref RouteTable
+
+
+
+
+# ------------------------------------------------------------#
+# OUTPUT
+# ------------------------------------------------------------# 
+Outputs:
+  EnvironmentName:
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub ${AWS::StackName}-Envname
+  EnvironmentType:
+    Value: !Ref EnvironmentType
+    Export:
+      Name: !Sub ${EnvironmentName}-Env
+  VPCID:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VPCID
+  PublicSubnet01ID:
+    Value: !Ref PublicSubnet01
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnet01
+  PublicSubnet02ID:
+    Value: !Ref PublicSubnet02
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnet02
+  PrivateSubnet01ID:
+    Value: !Ref PrivateSubnet01
+    Export:
+      Name: !Sub ${EnvironmentName}-PrivateSubnet01
+  PrivateSubnet02ID:
+    Value: !Ref PrivateSubnet02
+    Export:
+      Name: !Sub ${EnvironmentName}-PrivateSubnet02
